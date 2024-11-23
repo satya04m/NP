@@ -1,0 +1,16 @@
+//1.Write a shell program to print the reverse string of the given string.
+
+#!/bin/bash
+
+# Prompt the user for input
+read -p "Enter a string: " input_string
+
+# Reverse the string using 'rev'
+reversed_string=$(echo "$input_string" | rev)
+
+# Output the reversed string
+echo "Reversed string: $reversed_string"
+
+1. chmod +x reverse_string.sh
+2../reverse_string.sh
+
