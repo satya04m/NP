@@ -1,0 +1,128 @@
+udp_server.c
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <arpa/inet.h>
+
+#define PORT 8080
+#define MAX_BUFFER_SIZE 1024
+
+void sendFile(FILE *file, int socket, struct sockaddr *client_addr, socklen_t addrlen) {
+    char buffer[MAX_BUFFER_SIZE];
+    size_t bytesRead;
+
+    // Read the file and send its content to the client
+    while ((bytesRead = fread(buffer, 1, sizeof(buffer), file)) > 0) {
+        sendto(socket, buffer, bytesRead, 0, client_addr, addrlen);
+    }
+}
+
+int main() {
+    int server_fd;
+    struct sockaddr_in server_addr, client_addr;
+    socklen_t addrlen = sizeof(client_addr);
+    char buffer[MAX_BUFFER_SIZE] = {0};
+
+    // Create socket file descriptor
+    if ((server_fd = socket(AF_INET, SOCK_DGRAM, 0)) == 0) {
+        perror("Socket creation failed");
+        exit(EXIT_FAILURE);
+    }
+
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_addr.s_addr = INADDR_ANY;
+    server_addr.sin_port = htons(PORT);
+
+    // Bind the socket to the specified port
+    if (bind(server_fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
+        perror("Bind failed");
+        exit(EXIT_FAILURE);
+    }
+
+    printf("UDP Server listening on port %d...\n", PORT);
+
+    // Receive the file name from the client
+    int recv_len = recvfrom(server_fd, buffer, MAX_BUFFER_SIZE, 0, (struct sockaddr *)&client_addr, &addrlen);
+    buffer[recv_len] = '\0';
+    printf("File requested by client: %s\n", buffer);
+
+    // Open the requested file
+    FILE *file = fopen(buffer, "rb");
+    if (!file) {
+        perror("Error opening file");
+        close(server_fd);
+        exit(EXIT_FAILURE);
+    }
+
+    // Send the file to the client
+    sendFile(file, server_fd, (struct sockaddr *)&client_addr, addrlen);
+    printf("File sent successfully.\n");
+
+    fclose(file);
+    close(server_fd);
+    return 0;
+}
+
+udp_client.c
+
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <arpa/inet.h>
+
+#define PORT 8080
+#define MAX_BUFFER_SIZE 1024
+
+void receiveFile(FILE *file, int socket) {
+    char buffer[MAX_BUFFER_SIZE];
+    int bytesRead;
+
+    // Receive data from the server and write it to the file
+    while ((bytesRead = recv(socket, buffer, sizeof(buffer), 0)) > 0) {
+        fwrite(buffer, 1, bytesRead, file);
+    }
+}
+
+int main() {
+    int client_fd;
+    struct sockaddr_in server_addr;
+    char buffer[MAX_BUFFER_SIZE];
+
+    // Create socket file descriptor
+    if ((client_fd = socket(AF_INET, SOCK_DGRAM, 0)) == 0) {
+        perror("Socket creation failed");
+        exit(EXIT_FAILURE);
+    }
+
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_port = htons(PORT);
+    server_addr.sin_addr.s_addr = INADDR_ANY;
+
+    // Get the file name from the user
+    printf("Enter the name of the file to request: ");
+    fgets(buffer, MAX_BUFFER_SIZE, stdin);
+    buffer[strcspn(buffer, "\n")] = '\0'; // Remove newline character
+
+    // Send the file name to the server
+    sendto(client_fd, buffer, strlen(buffer), 0, (const struct sockaddr *)&server_addr, sizeof(server_addr));
+
+    // Open a file to save the received content
+    FILE *file = fopen("received_file.txt", "wb");
+    if (!file) {
+        perror("Error opening file");
+        close(client_fd);
+        exit(EXIT_FAILURE);
+    }
+
+    // Receive the file from the server
+    receiveFile(file, client_fd);
+    printf("File received successfully. Saved as 'received_file.txt'.\n");
+
+    fclose(file);
+    close(client_fd);
+    return 0;
+}
